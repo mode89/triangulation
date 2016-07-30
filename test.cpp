@@ -21,6 +21,7 @@ int main()
 {
     DEBUG("Initializing GLFW ...");
     glfwInit();
+    glfwWindowHint(GLFW_SAMPLES, 16);
 
     DEBUG("Creating window ...");
     GLFWwindow * window = glfwCreateWindow(
