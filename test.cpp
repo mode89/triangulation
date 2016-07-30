@@ -50,11 +50,39 @@ int main()
         sizeof(vertices), vertices, GL_STATIC_DRAW);
     VGL(glBindBuffer, GL_ARRAY_BUFFER, 0);
 
+    const char * vertexShaderSource = R"(
+        in vec2 pos;
+        void main()
+        {
+            gl_Position = vec4(pos, 0.0f, 1.0f);
+        }
+    )";
+    GLuint vertexShader = VGL(glCreateShader, GL_VERTEX_SHADER);
+    VGL(glShaderSource, vertexShader, 1, &vertexShaderSource, NULL);
+    VGL(glCompileShader, vertexShader);
+
+    const char * fragmentShaderSource = R"(
+        void main()
+        {
+            gl_FragColor = vec4(1.0f, 0.0f, 0.0f, 1.0f);
+        }
+    )";
+    GLuint fragmentShader = VGL(glCreateShader, GL_FRAGMENT_SHADER);
+    VGL(glShaderSource, fragmentShader, 1, &fragmentShaderSource, NULL);
+    VGL(glCompileShader, fragmentShader);
+
+    GLuint shaderProgram = VGL(glCreateProgram);
+    VGL(glAttachShader, shaderProgram, vertexShader);
+    VGL(glAttachShader, shaderProgram, fragmentShader);
+    VGL(glLinkProgram, shaderProgram);
+
     DEBUG("Running ...");
     while (!glfwWindowShouldClose(window))
     {
         VGL(glClearColor, 0.0f, 0.0f, 0.3f, 1.0f);
         VGL(glClear, GL_COLOR_BUFFER_BIT);
+
+        VGL(glUseProgram, shaderProgram);
 
         VGL(glPolygonMode, GL_FRONT_AND_BACK, GL_LINE);
 
