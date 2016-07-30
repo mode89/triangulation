@@ -56,6 +56,8 @@ int main()
         VGL(glClearColor, 0.0f, 0.0f, 0.3f, 1.0f);
         VGL(glClear, GL_COLOR_BUFFER_BIT);
 
+        VGL(glPolygonMode, GL_FRONT_AND_BACK, GL_LINE);
+
         VGL(glBindBuffer, GL_ARRAY_BUFFER, vertexBuffer);
         VGL(glVertexAttribPointer, 0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
         VGL(glEnableVertexAttribArray, 0);
