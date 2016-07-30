@@ -1,3 +1,4 @@
+#define GLM_SWIZZLE
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -20,6 +21,8 @@
         ERROR("Failed in " #func "()"); \
     }
 
+glm::vec2 vecAngleXZ;
+glm::mat4 matModel;
 glm::mat4 matView;
 glm::mat4 matProj;
 glm::mat4 matMvp;
@@ -29,6 +32,20 @@ void onResize(GLFWwindow * window, int width, int height)
     VGL(glViewport, 0, 0, width, height);
     matProj = glm::perspective(
         0.8f, static_cast<float>(width) / height, 1.0f, 100.0f);
+}
+
+void onMouseMove(GLFWwindow * window, double x, double y)
+{
+    static glm::vec2 oldXY = glm::vec2(x, y);
+    glm::vec2 newXY = glm::vec2(x, y);
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+        vecAngleXZ += (newXY - oldXY).yx() / 100.0f;
+
+    matModel = glm::rotate(vecAngleXZ[0], glm::vec3(1.0f, 0.0f, 0.0f)) *
+        glm::rotate(vecAngleXZ[1], glm::vec3(0.0f, 0.0f, 1.0f));
+
+   oldXY = newXY;
 }
 
 int main()
@@ -41,6 +58,7 @@ int main()
     GLFWwindow * window = glfwCreateWindow(
         640, 480, "Triangulation", NULL, NULL);
     glfwSetFramebufferSizeCallback(window, onResize);
+    glfwSetCursorPosCallback(window, onMouseMove);
     glfwMakeContextCurrent(window);
 
     DEBUG("Initializing GLEW ...");
@@ -90,7 +108,7 @@ int main()
     GLint uniMvp = VGL(glGetUniformLocation, shaderProgram, "mvp");
 
     matView = glm::lookAt(
-        glm::vec3(-5.0f, -5.0f, 5.0f),
+        glm::vec3(0.0f, -5.0f, 5.0f),
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 0.0f, 1.0f));
 
@@ -102,7 +120,7 @@ int main()
 
         VGL(glUseProgram, shaderProgram);
 
-        matMvp = matProj * matView;
+        matMvp = matProj * matView * matModel;
         VGL(glUniformMatrix4fv,
             uniMvp, 1, GL_FALSE, glm::value_ptr(matMvp));
 
