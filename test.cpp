@@ -6,11 +6,15 @@
     printf(__VA_ARGS__); \
     printf("\n");
 
+#define ERROR(...) \
+    DEBUG(__VA_ARGS__); \
+    throw 0;
+
 #define VGL(func, ...) \
     func(__VA_ARGS__); \
     if (glGetError() != GL_NONE) \
     { \
-        DEBUG("Failed in " #func "()"); \
+        ERROR("Failed in " #func "()"); \
     }
 
 int main()
