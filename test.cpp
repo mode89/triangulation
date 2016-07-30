@@ -1,5 +1,8 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/transform.hpp>
 #include <stdio.h>
 
 #define DEBUG(...) \
@@ -17,6 +20,17 @@
         ERROR("Failed in " #func "()"); \
     }
 
+glm::mat4 matView;
+glm::mat4 matProj;
+glm::mat4 matMvp;
+
+void onResize(GLFWwindow * window, int width, int height)
+{
+    VGL(glViewport, 0, 0, width, height);
+    matProj = glm::perspective(
+        0.8f, static_cast<float>(width) / height, 1.0f, 100.0f);
+}
+
 int main()
 {
     DEBUG("Initializing GLFW ...");
@@ -26,11 +40,7 @@ int main()
     DEBUG("Creating window ...");
     GLFWwindow * window = glfwCreateWindow(
         640, 480, "Triangulation", NULL, NULL);
-    glfwSetFramebufferSizeCallback(window,
-        [] (GLFWwindow * window, int width, int height) {
-            VGL(glViewport, 0, 0, width, height);
-        }
-    );
+    glfwSetFramebufferSizeCallback(window, onResize);
     glfwMakeContextCurrent(window);
 
     DEBUG("Initializing GLEW ...");
@@ -52,9 +62,10 @@ int main()
 
     const char * vertexShaderSource = R"(
         in vec2 pos;
+        uniform mat4 mvp;
         void main()
         {
-            gl_Position = vec4(pos, 0.0f, 1.0f);
+            gl_Position = mvp * vec4(pos, 0.0f, 1.0f);
         }
     )";
     GLuint vertexShader = VGL(glCreateShader, GL_VERTEX_SHADER);
@@ -76,6 +87,13 @@ int main()
     VGL(glAttachShader, shaderProgram, fragmentShader);
     VGL(glLinkProgram, shaderProgram);
 
+    GLint uniMvp = VGL(glGetUniformLocation, shaderProgram, "mvp");
+
+    matView = glm::lookAt(
+        glm::vec3(-5.0f, -5.0f, 5.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 1.0f));
+
     DEBUG("Running ...");
     while (!glfwWindowShouldClose(window))
     {
@@ -83,6 +101,10 @@ int main()
         VGL(glClear, GL_COLOR_BUFFER_BIT);
 
         VGL(glUseProgram, shaderProgram);
+
+        matMvp = matProj * matView;
+        VGL(glUniformMatrix4fv,
+            uniMvp, 1, GL_FALSE, glm::value_ptr(matMvp));
 
         VGL(glPolygonMode, GL_FRONT_AND_BACK, GL_LINE);
 
