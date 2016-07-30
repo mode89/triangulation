@@ -116,7 +116,7 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         VGL(glClearColor, 0.0f, 0.0f, 0.3f, 1.0f);
-        VGL(glClear, GL_COLOR_BUFFER_BIT);
+        VGL(glClear, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         VGL(glUseProgram, shaderProgram);
 
