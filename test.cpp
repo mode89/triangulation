@@ -21,6 +21,11 @@ int main()
     DEBUG("Creating window ...");
     GLFWwindow * window = glfwCreateWindow(
         640, 480, "Triangulation", NULL, NULL);
+    glfwSetFramebufferSizeCallback(window,
+        [] (GLFWwindow * window, int width, int height) {
+            VGL(glViewport, 0, 0, width, height);
+        }
+    );
     glfwMakeContextCurrent(window);
 
     DEBUG("Initializing GLEW ...");
