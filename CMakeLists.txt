@@ -1,11 +1,16 @@
 project(TRIANGULATION)
 cmake_minimum_required(VERSION 3.0)
 
+# Configuration
+
+    set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 # Dependencies
 
     find_library(GLFW_LIBRARY glfw)
 
     find_package(GLEW)
+    find_package(GLIB)
     find_package(OpenGL)
 
 # Targets
@@ -21,11 +26,19 @@ cmake_minimum_required(VERSION 3.0)
             -std=c++11
     )
 
+# Include
+
+    target_include_directories(triangulation-test
+        PRIVATE
+            ${GLIB_INCLUDE_DIRS}
+    )
+
 # Linkage
 
     target_link_libraries(triangulation-test
         PRIVATE
             ${GLEW_LIBRARIES}
             ${GLFW_LIBRARY}
+            gts
             ${OPENGL_LIBRARIES}
     )
