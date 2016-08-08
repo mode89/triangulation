@@ -1,6 +1,7 @@
 #define GLM_SWIZZLE
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
@@ -43,6 +44,8 @@ void onMouseMove(GLFWwindow * window, double x, double y)
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
         vecAngleXZ += (newXY - oldXY).yx() / 100.0f;
+    vecAngleXZ[0] = glm::clamp(
+        vecAngleXZ[0], -glm::half_pi<float>(), glm::half_pi<float>());
 
     matModel = glm::rotate(vecAngleXZ[0], glm::vec3(1.0f, 0.0f, 0.0f)) *
         glm::rotate(vecAngleXZ[1], glm::vec3(0.0f, 0.0f, 1.0f));
