@@ -4,7 +4,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
+#include <gts.h>
 #include <stdio.h>
+#include <vector>
 
 #define DEBUG(...) \
     printf(__VA_ARGS__); \
@@ -64,36 +66,64 @@ int main()
     DEBUG("Initializing GLEW ...");
     glewInit();
 
+    DEBUG("Building surface ...");
+    GtsSurface * gtsSurface = gts_surface_new(
+        gts_surface_class(),
+        gts_face_class(),
+        gts_edge_class(),
+        gts_vertex_class());
+    gts_surface_generate_sphere(gtsSurface, 1);
+    std::vector<float> buffer;
+    gts_surface_foreach_face(gtsSurface,
+        [] (gpointer item, gpointer data) {
+            std::vector<float> & buffer =
+                *reinterpret_cast<std::vector<float>*>(data);
+            GtsFace * face = GTS_FACE(item);
+            GtsEdge * e1 = face->triangle.e1;
+            GtsEdge * e2 = face->triangle.e2;
+            GtsVertex * v1 = e1->segment.v1;
+            GtsVertex * v2 = e1->segment.v2;
+            GtsVertex * v3 = (e2->segment.v1 == v1 || e2->segment.v1 == v2)
+                ? e2->segment.v2
+                : e2->segment.v1;
+            buffer.push_back(v1->p.x);
+            buffer.push_back(v1->p.y);
+            buffer.push_back(v1->p.z);
+            buffer.push_back(v2->p.x);
+            buffer.push_back(v2->p.y);
+            buffer.push_back(v2->p.z);
+            buffer.push_back(v3->p.x);
+            buffer.push_back(v3->p.y);
+            buffer.push_back(v3->p.z);
+            return 0;
+        }, &buffer);
+
     DEBUG("Creating vertex buffer ...");
-    const float vertices[] = {
-        -1.0f, -1.0f,
-        -1.0f,  1.0f,
-         1.0f, -1.0f,
-         1.0f,  1.0f
-    };
     GLuint vertexBuffer = 0;
     VGL(glGenBuffers, 1, &vertexBuffer);
     VGL(glBindBuffer, GL_ARRAY_BUFFER, vertexBuffer);
     VGL(glBufferData, GL_ARRAY_BUFFER,
-        sizeof(vertices), vertices, GL_STATIC_DRAW);
+        buffer.size() * sizeof(float), buffer.data(), GL_STATIC_DRAW);
     VGL(glBindBuffer, GL_ARRAY_BUFFER, 0);
 
+    DEBUG("Building vertex shader ...");
     const char * vertexShaderSource = R"(
-        in vec2 pos;
+        in vec3 pos;
         uniform mat4 mvp;
         void main()
         {
-            gl_Position = mvp * vec4(pos, 0.0f, 1.0f);
+            gl_Position = mvp * vec4(pos, 1.0f);
         }
     )";
     GLuint vertexShader = VGL(glCreateShader, GL_VERTEX_SHADER);
     VGL(glShaderSource, vertexShader, 1, &vertexShaderSource, NULL);
     VGL(glCompileShader, vertexShader);
 
+    DEBUG("Building fragment shader ...");
     const char * fragmentShaderSource = R"(
         void main()
         {
-            gl_FragColor = vec4(1.0f, 0.0f, 0.0f, 1.0f);
+            gl_FragColor = vec4(1.0f, 1.0f, 1.0f, 1.0f);
         }
     )";
     GLuint fragmentShader = VGL(glCreateShader, GL_FRAGMENT_SHADER);
@@ -127,11 +157,11 @@ int main()
         VGL(glPolygonMode, GL_FRONT_AND_BACK, GL_LINE);
 
         VGL(glBindBuffer, GL_ARRAY_BUFFER, vertexBuffer);
-        VGL(glVertexAttribPointer, 0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+        VGL(glVertexAttribPointer, 0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
         VGL(glEnableVertexAttribArray, 0);
         VGL(glBindBuffer, GL_ARRAY_BUFFER, 0);
 
-        VGL(glDrawArrays, GL_TRIANGLE_STRIP, 0, 4);
+        VGL(glDrawArrays, GL_TRIANGLES, 0, buffer.size() / 3);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
