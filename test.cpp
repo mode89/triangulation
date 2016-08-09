@@ -5,7 +5,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
+#include <gsl/gsl_multiroots.h>
 #include <gts.h>
+#include <memory>
 #include <stdio.h>
 #include <vector>
 
@@ -36,6 +38,55 @@ glm::mat4 matMvp;
 float surfaceEquation(float x, float y)
 {
     return pow(sqrt(x * x + y * y), 2);
+}
+
+void intersection()
+{
+    std::shared_ptr<gsl_multiroot_fsolver> solver(
+        gsl_multiroot_fsolver_alloc(gsl_multiroot_fsolver_hybrids, 3),
+        [] (gsl_multiroot_fsolver * s) { gsl_multiroot_fsolver_free(s); });
+
+    gsl_multiroot_function gslFunction;
+    gslFunction.f =
+        [] (const gsl_vector * in, void * p, gsl_vector * out) -> int {
+            glm::dvec3 p1(0.0f, 0.0f, 1.0f);
+            glm::dvec3 p2(1.0f, 1.0f, 0.0f);
+
+            double x = gsl_vector_get(in, 0);
+            double y = gsl_vector_get(in, 1);
+            double z = gsl_vector_get(in, 2);
+
+            double f0 = (x - p1.x) / (p2.x - p1.x) -
+                (y - p1.y) / (p2.y - p1.y);
+            double f1 = (x - p1.x) / (p2.x - p1.x) -
+                (z - p1.z) / (p2.z - p1.z);
+            double f2 = surfaceEquation(x, y) - z;
+
+            gsl_vector_set(out, 0, f0);
+            gsl_vector_set(out, 1, f1);
+            gsl_vector_set(out, 2, f2);
+
+            return GSL_SUCCESS;
+        };
+    gslFunction.n = 3;
+    gslFunction.params = nullptr;
+
+    std::shared_ptr<gsl_vector> initVals(gsl_vector_calloc(3),
+        [] (gsl_vector * v) { gsl_vector_free(v); });
+
+    gsl_multiroot_fsolver_set(solver.get(), &gslFunction, initVals.get());
+
+    do {
+        gsl_multiroot_fsolver_iterate(solver.get());
+        DEBUG("x: (%f %f %f) f: (%f %f %f)",
+            gsl_vector_get(solver->x, 0),
+            gsl_vector_get(solver->x, 1),
+            gsl_vector_get(solver->x, 2),
+            gsl_vector_get(solver->f, 0),
+            gsl_vector_get(solver->f, 1),
+            gsl_vector_get(solver->f, 2));
+    } while (gsl_multiroot_test_residual(
+        solver->f, 1e-5) == GSL_CONTINUE);
 }
 
 void onResize(GLFWwindow * window, int width, int height)
