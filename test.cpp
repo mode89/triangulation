@@ -24,6 +24,9 @@
         ERROR("Failed in " #func "()"); \
     }
 
+#define VECTOR(vertex) \
+    glm::vec3(vertex->p.x, vertex->p.y, vertex->p.z)
+
 glm::vec2 vecAngleXZ;
 glm::mat4 matModel;
 glm::mat4 matView;
@@ -53,6 +56,28 @@ void onMouseMove(GLFWwindow * window, double x, double y)
    oldXY = newXY;
 }
 
+gdouble refineCost(gpointer item, gpointer data)
+{
+    GtsEdge * e = GTS_EDGE(item);
+    GtsVertex * mv = gts_segment_midvertex(&e->segment, gts_vertex_class());
+    glm::vec3 vec = VECTOR(mv);
+    gts_object_destroy(GTS_OBJECT(mv));
+    return glm::length(vec);
+}
+
+GtsVertex * refineEdge(GtsEdge * e, GtsVertexClass * vcls, gpointer data)
+{
+    glm::vec3 v1 = VECTOR(e->segment.v1);
+    glm::vec3 v2 = VECTOR(e->segment.v2);
+    glm::vec3 v = glm::normalize((v1 + v2) / 2.0f);
+    return gts_vertex_new(vcls, v.x, v.y, v.z);
+}
+
+gboolean refineStop(gdouble cost, guint nedge, gpointer data)
+{
+    return cost > 0.98;
+}
+
 int main()
 {
     DEBUG("Initializing GLFW ...");
@@ -76,6 +101,11 @@ int main()
         gts_edge_class(),
         gts_vertex_class());
     gts_surface_generate_sphere(gtsSurface, 1);
+    gts_surface_refine(gtsSurface,
+        refineCost, nullptr,
+        refineEdge, nullptr,
+        refineStop, nullptr);
+
     std::vector<float> buffer;
     gts_surface_foreach_face(gtsSurface,
         [] (gpointer item, gpointer data) {
