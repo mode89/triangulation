@@ -33,6 +33,11 @@ glm::mat4 matView;
 glm::mat4 matProj;
 glm::mat4 matMvp;
 
+float surfaceEquation(float x, float y)
+{
+    return pow(sqrt(x * x + y * y), 2);
+}
+
 void onResize(GLFWwindow * window, int width, int height)
 {
     VGL(glViewport, 0, 0, width, height);
@@ -100,7 +105,39 @@ int main()
         gts_face_class(),
         gts_edge_class(),
         gts_vertex_class());
-    gts_surface_generate_sphere(gtsSurface, 1);
+
+    GtsVertexClass * vcls = gts_vertex_class();
+    GtsVertex * v0 = gts_vertex_new(vcls, 0.0f, 0.0f, 0.0f);
+    GtsVertex * v1 = gts_vertex_new(vcls,
+        1.0f, 0.0f, surfaceEquation(1.0f, 0.0f));
+    GtsVertex * v2 = gts_vertex_new(vcls,
+        0.0f, 1.0f, surfaceEquation(0.0f, 1.0f));
+    GtsVertex * v3 = gts_vertex_new(vcls,
+        -1.0f, 0.0f, surfaceEquation(-1.0f, 0.0f));
+    GtsVertex * v4 = gts_vertex_new(vcls,
+        0.0f, -1.0f, surfaceEquation(0.0f, -1.0f));
+
+    GtsEdgeClass * ecls = gts_edge_class();
+    GtsEdge * e1 = gts_edge_new(ecls, v0, v1);
+    GtsEdge * e2 = gts_edge_new(ecls, v0, v2);
+    GtsEdge * e3 = gts_edge_new(ecls, v0, v3);
+    GtsEdge * e4 = gts_edge_new(ecls, v0, v4);
+    GtsEdge * e5 = gts_edge_new(ecls, v1, v2);
+    GtsEdge * e6 = gts_edge_new(ecls, v2, v3);
+    GtsEdge * e7 = gts_edge_new(ecls, v3, v4);
+    GtsEdge * e8 = gts_edge_new(ecls, v4, v1);
+
+    GtsFaceClass * fcls = gts_face_class();
+    GtsFace * f1 = gts_face_new(fcls, e1, e2, e5);
+    GtsFace * f2 = gts_face_new(fcls, e2, e3, e6);
+    GtsFace * f3 = gts_face_new(fcls, e3, e4, e7);
+    GtsFace * f4 = gts_face_new(fcls, e4, e1, e8);
+
+    gts_surface_add_face(gtsSurface, f1);
+    gts_surface_add_face(gtsSurface, f2);
+    gts_surface_add_face(gtsSurface, f3);
+    gts_surface_add_face(gtsSurface, f4);
+
     gts_surface_refine(gtsSurface,
         refineCost, nullptr,
         refineEdge, nullptr,
