@@ -29,6 +29,8 @@
 #define VECTOR(vertex) \
     glm::vec3(vertex->p.x, vertex->p.y, vertex->p.z)
 
+static const glm::dvec3 kEye = glm::vec3(0.001f, 0.001f, 1.001f);
+
 glm::vec2 vecAngleXZ;
 glm::mat4 matModel;
 glm::mat4 matView;
@@ -37,48 +39,53 @@ glm::mat4 matMvp;
 
 float surfaceEquation(float x, float y)
 {
-    return pow(sqrt(x * x + y * y), 2);
+    return pow(sqrt(x * x + y * y), 8);
 }
 
-void intersection()
+glm::vec3 intersection(glm::vec3 point)
 {
     std::shared_ptr<gsl_multiroot_fsolver> solver(
-        gsl_multiroot_fsolver_alloc(gsl_multiroot_fsolver_hybrids, 3),
+        gsl_multiroot_fsolver_alloc(gsl_multiroot_fsolver_broyden, 3),
         [] (gsl_multiroot_fsolver * s) { gsl_multiroot_fsolver_free(s); });
 
     gsl_multiroot_function gslFunction;
     gslFunction.f =
         [] (const gsl_vector * in, void * p, gsl_vector * out) -> int {
-            glm::dvec3 p1(0.0f, 0.0f, 1.0f);
-            glm::dvec3 p2(1.0f, 1.0f, 0.0f);
+            const glm::dvec3 p2 = *reinterpret_cast<glm::vec3*>(p);
 
             double x = gsl_vector_get(in, 0);
             double y = gsl_vector_get(in, 1);
             double z = gsl_vector_get(in, 2);
 
-            double f0 = (x - p1.x) / (p2.x - p1.x) -
-                (y - p1.y) / (p2.y - p1.y);
-            double f1 = (x - p1.x) / (p2.x - p1.x) -
-                (z - p1.z) / (p2.z - p1.z);
+            double f0 = (x - kEye.x) * (p2.y - kEye.y) -
+                (y - kEye.y) * (p2.x - kEye.x);
+            double f1 = (x - kEye.x) * (p2.z - kEye.z) -
+                (z - kEye.z) * (p2.x - kEye.x);
             double f2 = surfaceEquation(x, y) - z;
 
             gsl_vector_set(out, 0, f0);
             gsl_vector_set(out, 1, f1);
             gsl_vector_set(out, 2, f2);
 
+            DEBUG("x: (%lf %lf %lf) f: (%lf %lf %lf)",
+                x, y, z, f0, f1, f2);
+
             return GSL_SUCCESS;
         };
     gslFunction.n = 3;
-    gslFunction.params = nullptr;
+    gslFunction.params = &point;
 
     std::shared_ptr<gsl_vector> initVals(gsl_vector_calloc(3),
         [] (gsl_vector * v) { gsl_vector_free(v); });
+    gsl_vector_set(initVals.get(), 0, point.x);
+    gsl_vector_set(initVals.get(), 1, point.y);
+    gsl_vector_set(initVals.get(), 2, point.z);
 
     gsl_multiroot_fsolver_set(solver.get(), &gslFunction, initVals.get());
 
     do {
         gsl_multiroot_fsolver_iterate(solver.get());
-        DEBUG("x: (%f %f %f) f: (%f %f %f)",
+        DEBUG("Best x: (%lf %lf %lf) f: (%lf %lf %lf)",
             gsl_vector_get(solver->x, 0),
             gsl_vector_get(solver->x, 1),
             gsl_vector_get(solver->x, 2),
@@ -87,6 +94,11 @@ void intersection()
             gsl_vector_get(solver->f, 2));
     } while (gsl_multiroot_test_residual(
         solver->f, 1e-5) == GSL_CONTINUE);
+
+    return glm::vec3(
+        gsl_vector_get(solver->x, 0),
+        gsl_vector_get(solver->x, 1),
+        gsl_vector_get(solver->x, 2));
 }
 
 void onResize(GLFWwindow * window, int width, int height)
@@ -115,23 +127,25 @@ void onMouseMove(GLFWwindow * window, double x, double y)
 gdouble refineCost(gpointer item, gpointer data)
 {
     GtsEdge * e = GTS_EDGE(item);
-    GtsVertex * mv = gts_segment_midvertex(&e->segment, gts_vertex_class());
-    glm::vec3 vec = VECTOR(mv);
-    gts_object_destroy(GTS_OBJECT(mv));
-    return glm::length(vec);
+    glm::vec3 v1 = VECTOR(e->segment.v1);
+    glm::vec3 v2 = VECTOR(e->segment.v2);
+    glm::dvec3 mv = (v1 + v2) / 2.0f;
+    glm::dvec3 nv = intersection(mv);
+    return glm::length(mv - kEye) / glm::length(nv - kEye);
 }
 
 GtsVertex * refineEdge(GtsEdge * e, GtsVertexClass * vcls, gpointer data)
 {
     glm::vec3 v1 = VECTOR(e->segment.v1);
     glm::vec3 v2 = VECTOR(e->segment.v2);
-    glm::vec3 v = glm::normalize((v1 + v2) / 2.0f);
-    return gts_vertex_new(vcls, v.x, v.y, v.z);
+    glm::dvec3 mv = (v1 + v2) / 2.0f;
+    glm::dvec3 nv = intersection(mv);
+    return gts_vertex_new(vcls, nv.x, nv.y, nv.z);
 }
 
 gboolean refineStop(gdouble cost, guint nedge, gpointer data)
 {
-    return cost > 0.98;
+    return cost > 0.99;
 }
 
 int main()
