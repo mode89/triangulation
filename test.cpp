@@ -5,7 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
-#include <gsl/gsl_multiroots.h>
+#include <gsl/gsl_multimin.h>
 #include <gts.h>
 #include <memory>
 #include <stdio.h>
@@ -29,76 +29,58 @@
 #define VECTOR(vertex) \
     glm::vec3(vertex->p.x, vertex->p.y, vertex->p.z)
 
-static const glm::dvec3 kEye = glm::vec3(0.001f, 0.001f, 1.001f);
-
 glm::vec2 vecAngleXZ;
 glm::mat4 matModel;
 glm::mat4 matView;
 glm::mat4 matProj;
 glm::mat4 matMvp;
 
-float surfaceEquation(float x, float y)
+double surfaceEquation(double x, double y)
 {
-    return pow(sqrt(x * x + y * y), 8);
+    return pow(x * x + y * y, 5);
 }
 
-glm::vec3 intersection(glm::vec3 point)
+glm::vec3 nearestPoint(glm::vec3 p)
 {
-    std::shared_ptr<gsl_multiroot_fsolver> solver(
-        gsl_multiroot_fsolver_alloc(gsl_multiroot_fsolver_broyden, 3),
-        [] (gsl_multiroot_fsolver * s) { gsl_multiroot_fsolver_free(s); });
+    std::shared_ptr<gsl_multimin_fminimizer> minimizer(
+        gsl_multimin_fminimizer_alloc(
+            gsl_multimin_fminimizer_nmsimplex2, 2),
+        [] (gsl_multimin_fminimizer * m) {
+            gsl_multimin_fminimizer_free(m);
+        });
 
-    gsl_multiroot_function gslFunction;
-    gslFunction.f =
-        [] (const gsl_vector * in, void * p, gsl_vector * out) -> int {
-            const glm::dvec3 p2 = *reinterpret_cast<glm::vec3*>(p);
+    gsl_multimin_function function;
+    function.n = 2;
+    function.params = &p;
+    function.f = [] (const gsl_vector * in, void * params) -> double {
+        const glm::dvec3 p = *reinterpret_cast<glm::vec3*>(params);
+        const double x = gsl_vector_get(in, 0);
+        const double y = gsl_vector_get(in, 1);
+        const double z = surfaceEquation(x, y);
+        return glm::length(p - glm::dvec3(x, y, z));
+    };
 
-            double x = gsl_vector_get(in, 0);
-            double y = gsl_vector_get(in, 1);
-            double z = gsl_vector_get(in, 2);
-
-            double f0 = (x - kEye.x) * (p2.y - kEye.y) -
-                (y - kEye.y) * (p2.x - kEye.x);
-            double f1 = (x - kEye.x) * (p2.z - kEye.z) -
-                (z - kEye.z) * (p2.x - kEye.x);
-            double f2 = surfaceEquation(x, y) - z;
-
-            gsl_vector_set(out, 0, f0);
-            gsl_vector_set(out, 1, f1);
-            gsl_vector_set(out, 2, f2);
-
-            DEBUG("x: (%lf %lf %lf) f: (%lf %lf %lf)",
-                x, y, z, f0, f1, f2);
-
-            return GSL_SUCCESS;
-        };
-    gslFunction.n = 3;
-    gslFunction.params = &point;
-
-    std::shared_ptr<gsl_vector> initVals(gsl_vector_calloc(3),
+    std::shared_ptr<gsl_vector> initVals(gsl_vector_alloc(2),
         [] (gsl_vector * v) { gsl_vector_free(v); });
-    gsl_vector_set(initVals.get(), 0, point.x);
-    gsl_vector_set(initVals.get(), 1, point.y);
-    gsl_vector_set(initVals.get(), 2, point.z);
+    gsl_vector_set(initVals.get(), 0, p.x);
+    gsl_vector_set(initVals.get(), 1, p.y);
 
-    gsl_multiroot_fsolver_set(solver.get(), &gslFunction, initVals.get());
+    std::shared_ptr<gsl_vector> initSteps(gsl_vector_alloc(2),
+        [] (gsl_vector * v) { gsl_vector_free(v); });
+    gsl_vector_set(initSteps.get(), 0, 1e-3);
+    gsl_vector_set(initSteps.get(), 1, 1e-3);
+
+    gsl_multimin_fminimizer_set(
+        minimizer.get(), &function, initVals.get(), initSteps.get());
 
     do {
-        gsl_multiroot_fsolver_iterate(solver.get());
-        DEBUG("Best x: (%lf %lf %lf) f: (%lf %lf %lf)",
-            gsl_vector_get(solver->x, 0),
-            gsl_vector_get(solver->x, 1),
-            gsl_vector_get(solver->x, 2),
-            gsl_vector_get(solver->f, 0),
-            gsl_vector_get(solver->f, 1),
-            gsl_vector_get(solver->f, 2));
-    } while (gsl_multiroot_test_residual(
-        solver->f, 1e-5) == GSL_CONTINUE);
+        gsl_multimin_fminimizer_iterate(minimizer.get());
+    } while(gsl_multimin_test_size(minimizer->size, 1e-7) == GSL_CONTINUE);
 
-    return glm::vec3(
-        gsl_vector_get(solver->x, 0),
-        gsl_vector_get(solver->x, 1),
-        gsl_vector_get(solver->x, 2));
+    const double x = gsl_vector_get(minimizer->x, 0);
+    const double y = gsl_vector_get(minimizer->x, 1);
+    const double z = surfaceEquation(x, y);
+    return glm::vec3(x, y, z);
 }
 
 void onResize(GLFWwindow * window, int width, int height)
@@ -130,8 +112,8 @@ gdouble refineCost(gpointer item, gpointer data)
     glm::vec3 v1 = VECTOR(e->segment.v1);
     glm::vec3 v2 = VECTOR(e->segment.v2);
     glm::dvec3 mv = (v1 + v2) / 2.0f;
-    glm::dvec3 nv = intersection(mv);
-    return glm::length(mv - kEye) / glm::length(nv - kEye);
+    glm::dvec3 nv = nearestPoint(mv);
+    return -glm::length(mv - nv);
 }
 
 GtsVertex * refineEdge(GtsEdge * e, GtsVertexClass * vcls, gpointer data)
@@ -139,13 +121,13 @@ GtsVertex * refineEdge(GtsEdge * e, GtsVertexClass * vcls, gpointer data)
     glm::vec3 v1 = VECTOR(e->segment.v1);
     glm::vec3 v2 = VECTOR(e->segment.v2);
     glm::dvec3 mv = (v1 + v2) / 2.0f;
-    glm::dvec3 nv = intersection(mv);
+    glm::dvec3 nv = nearestPoint(mv);
     return gts_vertex_new(vcls, nv.x, nv.y, nv.z);
 }
 
 gboolean refineStop(gdouble cost, guint nedge, gpointer data)
 {
-    return cost > 0.99;
+    return nedge > 1000;
 }
 
 int main()
