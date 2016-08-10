@@ -1,0 +1,4 @@
+#cmakedefine HAVE_DECL_FINITE 1
+#cmakedefine HAVE_IEEE_COMPARISONS 1
+
+#define RETURN_IF_NULL(x) if (!x) { return ; }
