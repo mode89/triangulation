@@ -10,9 +10,10 @@ cmake_minimum_required(VERSION 3.0)
     find_library(GLFW_LIBRARY glfw)
 
     find_package(GLEW)
-    find_package(GLIB)
     find_package(GSL)
     find_package(OpenGL)
+
+    add_subdirectory(gts)
 
 # Targets
 
@@ -31,7 +32,6 @@ cmake_minimum_required(VERSION 3.0)
 
     target_include_directories(triangulation-test
         PRIVATE
-            ${GLIB_INCLUDE_DIRS}
             ${GSL_INCLUDE_DIRS}
     )
 
